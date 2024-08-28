@@ -3,9 +3,14 @@
 ## These variables are expected to be passed in by the operator
 ## ---------------------------------------------------------------------------------------------------------------------
 
-variable "databricks_metastore_bucket_arn" {
-    type        = string
-    description = "Databricks Unity Catalog Metastore S3 Bucket ARN"
+variable "aws_kms_key_arn" {
+  type        = string
+  description = "AWS Bucket Name for Databricks Accounts. Required for Buckets with Custom KMS Encryption Keys"
+}
+
+variable "databricks_bucket_arns" {
+    type        = list(string)
+    description = "List of S3 Bucket ARNs to allow access from Databricks"
 }
 
 variable "databricks_unity_catalog_role_name" {

@@ -14,8 +14,196 @@ terraform{
   }
 }
 
+
+locals {
+  databricks_metastore_grants = [{
+    principal  = "${var.databricks_group_prefix}-admin"
+    privileges = var.databricks_metastore_grants
+  }]
+
+  databricks_catalog_grants = [{
+    principal  = "${var.databricks_group_prefix}-admin"
+    privileges = var.databricks_catalog_grants
+  }]
+
+  aws_bucket_arns = [
+    module.databricks_metastore_bucket.bucket_arn,
+    module.databricks_external_bucket.bucket_arn
+  ]
+}
+
+
 data "aws_region" "current" {
     provider = aws.auth_session
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS SERVICE PRINCIPAL RESOURCE
+##
+## Creates a Databricks workspace level service princiapl.
+## ---------------------------------------------------------------------------------------------------------------------
+resource "databricks_service_principal" "this" {
+  provider   = databricks.workspace
+
+  display_name = var.databricks_service_principal_name
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS SERVICE PRINCIPAL ROLE RESOURCE
+## 
+## Append a Databricks Account role to an existing Databricks service principal.
+## 
+## Parameters:
+## - `service_principal_id`: Databricks Accounts service principal client ID.
+## - `role`: Databricks Accounts service principal role name.
+## ---------------------------------------------------------------------------------------------------------------------
+resource "databricks_service_principal_role" "this" {
+  provider   = databricks.accounts
+  
+  service_principal_id = databricks_service_principal.this.application_id
+  role                 = "account_admin"
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS SERVICE PRINCIPAL ROLE RESOURCE
+## 
+## Append a Databricks Account role to an existing Databricks service principal.
+## 
+## Parameters:
+## - `service_principal_id`: Databricks Accounts service principal client ID.
+## - `role`: Databricks Accounts service principal role name.
+## ---------------------------------------------------------------------------------------------------------------------
+data "databricks_user" "this" {
+  provider   = databricks.accounts
+  depends_on = [ databricks_service_principal_role.this ]
+  
+  user_name = var.DATABRICKS_ADMINISTRATOR
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS ADMIN GROUP MODULE
+##
+## This module creates a Databricks group with administrative privileges, and assigns both the Databricks Accounts
+## admin & the Azure Service Principal to the admin group.
+##
+## Parameters:
+## - `group_name`: The name of the Databricks group.
+## - `allow_cluster_create`: Whether to allow creating clusters.
+## - `allow_databricks_sql_access`: Whether to allow access to Databricks SQL.
+## - `allow_instance_pool_create`: Whether to allow creating instance pools.
+## - `member_ids`: List of Databricks member IDs to assign into the group.
+## ---------------------------------------------------------------------------------------------------------------------
+module "databricks_admin_group" {
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_group?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
+  depends_on = [ databricks_service_principal_role.this ]
+  
+  group_name                  = "${var.databricks_group_prefix}-admin"
+  allow_cluster_create        = true
+  allow_databricks_sql_access = true
+  allow_instance_pool_create  = true
+  member_ids                  = [
+    data.databricks_user.this.id,
+    databricks_service_principal.this.application_id,
+  ]
+
+  providers = {
+    databricks.workspace = databricks.accounts
+  }
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS USER GROUP MODULE
+##
+## This module creates a Databricks group with user privileges.
+##
+## Parameters:
+## - `group_name`: The name of the Databricks group.
+## - `allow_databricks_sql_access`: Whether to allow access to Databricks SQL.
+## ---------------------------------------------------------------------------------------------------------------------
+module "databricks_user_group" {
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_group?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
+  depends_on = [ databricks_service_principal_role.this ]
+  
+  group_name                  = "${var.databricks_group_prefix}-user"
+  allow_databricks_sql_access = true
+
+  providers = {
+    databricks.workspace = databricks.accounts
+  }
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS SERVICE PRINCIPAL ROLE RESOURCE
+## 
+## Append a Databricks Account role to an existing Databricks service principal.
+## 
+## Parameters:
+## - `application_id`: Databricks service principal client ID.
+## - `comment`: Databricks Personal Access Token Comment.
+## - `lifetime_seconds`: Databricks token lifetime in seconds.
+## ---------------------------------------------------------------------------------------------------------------------
+resource "databricks_obo_token" "this" {
+  provider   = databricks.workspace
+  depends_on = [
+    module.databricks_admin_group,
+    module.databricks_user_group
+  ]
+  
+  application_id   = databricks_service_principal.this.application_id
+  comment          = "PAT on behalf of ${databricks_service_principal.this.display_name}"
+  lifetime_seconds = var.databricks_service_principal_token_seconds
+}
+
+
+##---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS BUCKET MODULE
+##
+## This module creates an S3 bucket for Databricks Workspace & Unity Catalog. The metastore bucket and external storage
+## bucket require seperate cloud storage locations otherwise Databricks workspace level configurations fail due to
+## overlapping root storage locations.
+##
+## Parameters:
+## - `bucket_name`: S3 name.
+## - `kms_key_arn`: AWS KMS Encryption Key ARN.
+##---------------------------------------------------------------------------------------------------------------------
+module "databricks_metastore_bucket" {
+  source = "github.com/sim-parables/terraform-aws-blob-trigger//modules/s3_bucket?ref=f79892d5eac2ad93d5ada1aa7f2a83822b6cc2de"
+
+  bucket_name = var.databricks_storage_name
+  kms_key_arn = var.aws_kms_key_arn
+
+  providers = {
+    aws.auth_session = aws.auth_session
+  }
+}
+
+
+##---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS BUCKET MODULE
+##
+## This module creates an S3 bucket for Databricks Workspace & Unity Catalog. The metastore bucket and external storage
+## bucket require seperate cloud storage locations otherwise Databricks workspace level configurations fail due to
+## overlapping root storage locations.
+##
+## Parameters:
+## - `bucket_name`: S3 name.
+## - `kms_key_arn`: AWS KMS Encryption Key ARN.
+##---------------------------------------------------------------------------------------------------------------------
+module "databricks_external_bucket" {
+  source = "github.com/sim-parables/terraform-aws-blob-trigger//modules/s3_bucket?ref=f79892d5eac2ad93d5ada1aa7f2a83822b6cc2de"
+
+  bucket_name = "${var.databricks_storage_name}-external-location"
+  kms_key_arn = var.aws_kms_key_arn
+
+  providers = {
+    aws.auth_session = aws.auth_session
+  }
 }
 
 
@@ -34,13 +222,16 @@ data "aws_region" "current" {
 ## - `databricks.accounts`: The Databricks provider.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_metastore" {
-  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_metastore?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_metastore?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
+  depends_on = [ 
+    module.databricks_admin_group
+  ]
 
   databricks_metastore_name    = var.databricks_storage_name
-  databricks_unity_admin_group = var.databricks_admin_group
+  databricks_unity_admin_group = module.databricks_admin_group.databricks_group_name
   databricks_workspace_id      = var.databricks_workspace_number
-  databricks_storage_root      = "s3://${var.aws_s3_bucket_name}"
-  databricks_metastore_grants  = var.databricks_metastore_grants
+  databricks_storage_root      = "s3://${module.databricks_metastore_bucket.bucket_id}"
+  databricks_metastore_grants  = local.databricks_metastore_grants
   cloud_region                 = data.aws_region.current.name
 
   providers = {
@@ -65,11 +256,14 @@ module "databricks_metastore" {
 ## Providers:
 ## - `aws.auth_session`: The AWS provider for authentication.
 ## ---------------------------------------------------------------------------------------------------------------------
-module "aws_unity_catalog_crossaccount_policy_step_0" {
+module "aws_unity_catalog_crossaccount_policy" {
   source = "./modules/aws_unity_catalog_crossaccount_policy"
+  depends_on = [ module.databricks_metastore ]
   
+  aws_kms_key_arn                           = var.aws_kms_key_arn
   databricks_unity_catalog_role_name        = var.databricks_storage_name
-  databricks_metastore_bucket_arn           = var.aws_s3_bucket_arn
+  databricks_bucket_arns                    = local.aws_bucket_arns
+  databricks_storage_credential_external_id = var.DATABRICKS_ACCOUNT_ID
   tags                                      = var.tags
   
   providers = {
@@ -92,41 +286,11 @@ module "aws_unity_catalog_crossaccount_policy_step_0" {
 ## ---------------------------------------------------------------------------------------------------------------------
 resource "databricks_storage_credential" "this" {
   provider = databricks.workspace
+  depends_on = [ module.aws_unity_catalog_crossaccount_policy ]
   
   name     = "${var.databricks_storage_name}-credential"
   aws_iam_role {
-    role_arn = module.aws_unity_catalog_crossaccount_policy_step_0.databricks_metastore_cross_account_policy_arn
-  }
-}
-
-
-## ---------------------------------------------------------------------------------------------------------------------
-## AWS UNITY CATALOG CROSS-ACCOUNT POLICY STEP 1 MODULE
-##
-## This module updates the cross-account policies for AWS Unity Catalog. Modify the trust relationship policy to add 
-## your storage credential’s external ID and make it self-assuming.
-##
-## Parameters:
-## - `databricks_unity_catalog_role_name`: The name of the Databricks Unity Catalog role.
-## - `databricks_metastore_bucket_arn`: The ARN of the Databricks metastore bucket.
-## - `databricks_storage_credential_external_id`: The external ID of the Databricks storage credential IAM role.
-## - `databricks_storage_credential_iam_arn`: The ARN of the Unity Catalog IAM role.
-## - `tags`: Tags to be applied to AWS resources.
-##
-## Providers:
-## - `aws.auth_session`: The AWS provider for authentication.
-## ---------------------------------------------------------------------------------------------------------------------
-module "aws_unity_catalog_crossaccount_policy_step_1" {
-  source = "./modules/aws_unity_catalog_crossaccount_policy"
-  
-  databricks_unity_catalog_role_name        = var.databricks_storage_name
-  databricks_metastore_bucket_arn           = var.aws_s3_bucket_arn
-  databricks_storage_credential_external_id = databricks_storage_credential.this.aws_iam_role[0].external_id
-  databricks_storage_credential_iam_arn     = databricks_storage_credential.this.aws_iam_role[0].role_arn
-  tags                                      = var.tags
-  
-  providers = {
-    aws.auth_session = aws.auth_session
+    role_arn = module.aws_unity_catalog_crossaccount_policy.databricks_metastore_cross_account_policy_arn
   }
 }
 
@@ -145,7 +309,49 @@ resource "time_sleep" "grant_propogation" {
     databricks_storage_credential.this
   ]
 
-  create_duration = "30s"
+  create_duration = "180s"
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS MWS PERMISSION ASSIGNMENT RESOURCE
+##
+## This resource assigns the Admin Databricks Account group to the Databricks Workspace level. This allows web portal
+## entry and admin level service usability to those members assigned into the group.
+##
+## Parameters:
+## - `workspace_id`: The Databricks Workspace ID.
+## - `principal_id`: The Databricks Account level group ID.
+## - `permissions`: Specific Databricks Workspace level group permissions (Different to grants).
+## ---------------------------------------------------------------------------------------------------------------------
+resource "databricks_mws_permission_assignment" "admin" {
+  provider = databricks.accounts
+  depends_on = [ time_sleep.grant_propogation ]
+
+  workspace_id = var.databricks_workspace_number
+  principal_id = module.databricks_admin_group.databricks_group_id
+  permissions  = ["ADMIN"]
+}
+
+
+## ---------------------------------------------------------------------------------------------------------------------
+## DATABRICKS MWS PERMISSION ASSIGNMENT RESOURCE
+##
+## This resource assigns the User Databricks Account group to the Databricks Workspace level. This allows web portal
+## entry and basic level service usability to those members assigned into the group.
+##
+## Parameters:
+## - `workspace_id`: The Databricks Workspace ID.
+## - `principal_id`: The Databricks Account level group ID.
+## - `permissions`: Specific Databricks Workspace level group permissions (Different to grants).
+## ---------------------------------------------------------------------------------------------------------------------
+resource "databricks_mws_permission_assignment" "user" {
+  provider = databricks.accounts
+  depends_on = [ time_sleep.grant_propogation ]
+  
+  workspace_id = var.databricks_workspace_number
+  principal_id = module.databricks_user_group.databricks_group_id
+  permissions  = ["USER"]
 }
 
 
@@ -161,17 +367,17 @@ resource "time_sleep" "grant_propogation" {
 ## - `databricks_catalog_grants`: List of Databricks Catalog roles mappings to grant to specific principal.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_external_location" {
-  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_external_location?ref=c05bc4f94a1167c550496f2f3565fa319f68bf8b"
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_external_location?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
   depends_on = [
     databricks_storage_credential.this,
     module.databricks_metastore,
     time_sleep.grant_propogation
   ]
 
-  databricks_external_location_name = var.databricks_storage_name
-  databricks_external_storage_url   = "s3://${var.aws_s3_bucket_name}"
+  databricks_external_location_name = "${var.databricks_storage_name}-external-location"
+  databricks_external_storage_url   = "s3://${module.databricks_external_bucket.bucket_id}"
   databricks_storage_credential_id  = databricks_storage_credential.this.id
-  databricks_catalog_grants         = var.databricks_catalog_grants
+  databricks_catalog_grants         = local.databricks_catalog_grants
   databricks_catalog_name           = var.databricks_catalog_name
 
   providers = {
@@ -196,12 +402,13 @@ module "databricks_external_location" {
 ## ---------------------------------------------------------------------------------------------------------------------
 resource "databricks_metastore_data_access" "this" {
   provider     = databricks.workspace
+  depends_on = [ module.aws_unity_catalog_crossaccount_policy ]
 
   metastore_id = module.databricks_metastore.metastore_id
-  name         = module.aws_unity_catalog_crossaccount_policy_step_1.databricks_metastore_data_access_policy_name
+  name         = "${var.databricks_catalog_name}-data-access"
   is_default   = true
   
   aws_iam_role {
-    role_arn = module.aws_unity_catalog_crossaccount_policy_step_1.databricks_metastore_data_access_policy_arn
+    role_arn = module.aws_unity_catalog_crossaccount_policy.databricks_metastore_data_access_policy_arn
   }
 }

@@ -13,48 +13,12 @@ terraform{
   }
 }
 
-## ---------------------------------------------------------------------------------------------------------------------
-## AWS AVAILABILITY ZONES DATA SOURCE
-##
-## This data source retrieves information about the available AWS Availability Zones.
-##
-## Providers:
-## - `aws.auth_session`: The AWS Authenticated Session provider.
-## ---------------------------------------------------------------------------------------------------------------------
-data "aws_availability_zones" "available" {
+data "aws_region" "current" {
   provider = aws.auth_session
 }
 
-## ---------------------------------------------------------------------------------------------------------------------
-## RANDOM STRING RESOURCE
-##
-## This resource generates a random string of a specified length.
-##
-## Parameters:
-## - `special`: Whether to include special characters in the random string.
-## - `upper`: Whether to include uppercase letters in the random string.
-## - `length`: The length of the random string.
-## ---------------------------------------------------------------------------------------------------------------------
-resource "random_string" "this" {
-  special = false
-  upper   = false
-  length  = 4
-}
-
-locals {
-  cloud   = "aws"
-  program = "spark-databricks"
-  project = "datasim"
-}
-
 locals  {
-  prefix    = "${local.program}-${local.project}-${random_string.this.id}"
-  vpc_name = var.aws_vpc_name != null ? var.aws_vpc_name : "${local.prefix}-databricks-workspace"
-  tags      = merge(var.tags, {
-    program = local.program
-    project = local.project
-    env     = "dev"
-  })
+  vpc_availability_zone = [for zone in ["a", "b", "c"] : "${data.aws_region.current.name}${zone}"]
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
@@ -78,18 +42,15 @@ locals  {
 ## - `default_security_group_name`: The name of the default security group.
 ## - `default_security_group_egress`: Egress rules for the default security group.
 ## - `default_security_group_ingress`: Ingress rules for the default security group.
-##
-## Providers:
-## - `aws`: The AWS provider.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "5.12.1"
 
-  name = local.vpc_name
+  name = var.aws_vpc_name
   cidr = var.cidr_block
-  azs  = data.aws_availability_zones.available.names
-  tags = local.tags
+  azs  = local.vpc_availability_zone
+  tags = var.tags
 
   enable_dns_hostnames = true
   enable_nat_gateway   = true
@@ -103,7 +64,7 @@ module "vpc" {
   ]
 
   manage_default_security_group = true
-  default_security_group_name   = "${local.vpc_name}-sg"
+  default_security_group_name   = "${var.aws_vpc_name}-sg"
 
   default_security_group_egress = [{
     cidr_blocks = "0.0.0.0/0"
@@ -151,29 +112,29 @@ module "vpc_endpoints" {
         module.vpc.private_route_table_ids,
         module.vpc.public_route_table_ids
       ])
-      tags = merge(local.tags, {
-        Name = "${local.vpc_name}-s3-vpc-endpoint"
+      tags = merge(var.tags, {
+        Name = "${var.aws_vpc_name}-s3-vpc-endpoint"
       })
     },
     sts = {
       service             = "sts"
       private_dns_enabled = true
       subnet_ids          = module.vpc.private_subnets
-      tags = merge(local.tags, {
-        Name = "${local.vpc_name}-sts-vpc-endpoint"
+      tags = merge(var.tags, {
+        Name = "${var.aws_vpc_name}-sts-vpc-endpoint"
       })
     },
     kinesis-streams = {
       service             = "kinesis-streams"
       private_dns_enabled = true
       subnet_ids          = module.vpc.private_subnets
-      tags = merge(local.tags, {
-        Name = "${local.vpc_name}-kinesis-vpc-endpoint"
+      tags = merge(var.tags, {
+        Name = "${var.aws_vpc_name}-kinesis-vpc-endpoint"
       })
     },
   }
 
-  tags = local.tags
+  tags = var.tags
 
   providers = {
     aws = aws.auth_session
@@ -200,7 +161,7 @@ module "vpc_endpoints" {
 resource "databricks_mws_networks" "this" {
   provider           = databricks.accounts
   account_id         = var.databricks_account_id
-  network_name       = "${local.vpc_name}-network"
+  network_name       = "${var.aws_vpc_name}-network"
   security_group_ids = [module.vpc.default_security_group_id]
   subnet_ids         = module.vpc.private_subnets
   vpc_id             = module.vpc.vpc_id

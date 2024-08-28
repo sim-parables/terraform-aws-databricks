@@ -11,16 +11,23 @@ terraform{
 # More details on this static IAM role can be found here
 # https://docs.databricks.com/en/connect/unity-catalog/storage-credentials.html
 locals {
-  databricks_aws_arn = ["arn:aws:iam::414351767826:role/unity-catalog-prod-UCMasterRole-14S5ZJVKOTYTL"]
+  databricks_aws_arn = [
+    "arn:aws:iam::414351767826:role/unity-catalog-prod-UCMasterRole-14S5ZJVKOTYTL",
+    var.databricks_storage_credential_iam_arn == null ? "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root": var.databricks_storage_credential_iam_arn,
+  ]
+
+  aws_bucket_arns = flatten([
+    for arn in var.databricks_bucket_arns : [
+        arn,
+        "${arn}/*"
+    ]
+  ])
 }
 
 ## ---------------------------------------------------------------------------------------------------------------------
 ## AWS CALLER IDENTITY DATA BLOCK
 ##
 ## This data block retrieves the caller identity information for the current AWS session.
-##
-## Providers:
-## - `aws.auth_session`: The AWS provider for authentication.
 ## ---------------------------------------------------------------------------------------------------------------------
 data "aws_caller_identity" "current" {
     provider = aws.auth_session
@@ -36,9 +43,6 @@ data "aws_caller_identity" "current" {
 ## - `var.unity_catalog_iam_arn`: The ARN of the IAM role for the Unity catalog.
 ## - `var.databricks_storage_credential_iam_external_id`: External ID for Databricks storage credential IAM.
 ## - `role_name`: Local variable representing the IAM role name.
-##
-## Providers:
-## - `aws.auth_session`: The AWS provider for authentication.
 ## ---------------------------------------------------------------------------------------------------------------------
 data "aws_iam_policy_document" "this" {
     provider = aws.auth_session
@@ -47,7 +51,7 @@ data "aws_iam_policy_document" "this" {
         effect = "Allow"
         actions = ["sts:AssumeRole"]
         principals {
-            identifiers = concat(local.databricks_aws_arn, coalesce([var.databricks_storage_credential_iam_arn], []))
+            identifiers = local.databricks_aws_arn
             type        = "AWS"
         }
         condition {
@@ -100,20 +104,29 @@ resource "aws_iam_policy" "this" {
                     "s3:PutObject",
                     "s3:DeleteObject",
                     "s3:ListBucket",
-                    "s3:GetBucketLocation"
+                    "s3:GetBucketLocation",
+                    "kms:*",
                 ]
-                Resource = [
-                    var.databricks_metastore_bucket_arn,
-                    "${var.databricks_metastore_bucket_arn}/*"
-                ]
+                Resource = local.aws_bucket_arns
                 Effect   = "Allow"
+            },
+            {
+                Action = [
+                    "kms:Decrypt",
+                    "kms:Encrypt",
+                    "kms:GenerateDataKey*"
+                ],
+                Resource = [
+                    var.aws_kms_key_arn
+                ],
+                Effect = "Allow"
             },
             {
                 Action   = [
                     "sts:AssumeRole"
                 ]
                 Resource = [
-                    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.databricks_unity_catalog_role_name}-role"
+                    "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
                 ]
                 Effect   = "Allow"
             }
@@ -142,4 +155,11 @@ resource "aws_iam_role" "this" {
     assume_role_policy  = data.aws_iam_policy_document.this.json
     managed_policy_arns = [aws_iam_policy.this.arn]
     tags                = var.tags
+
+    lifecycle {
+      ignore_changes = [ 
+        assume_role_policy,
+        managed_policy_arns 
+      ]
+    }
 }
