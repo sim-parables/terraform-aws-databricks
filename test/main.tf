@@ -1,4 +1,4 @@
-terraform{
+terraform {
   required_providers {
     databricks = {
       source = "databricks/databricks"
@@ -52,14 +52,14 @@ locals {
 }
 
 
-locals  {
+locals {
   prefix             = "${random_string.this.id}-${local.program}-${local.project}"
   secret_scope       = upper(local.cloud)
   client_id_name     = "${local.prefix}-sp-client-id"
   client_secret_name = "${local.prefix}-sp-client-secret"
   catalog_name       = "${local.project}_catalog"
   schema_name        = "db_terraform"
-  
+
   assume_role_policies = [
     {
       effect = "Allow"
@@ -117,31 +117,31 @@ locals  {
   ]
 
   databricks_metastore_grants = [
-    "CREATE_CATALOG", "CREATE_CONNECTION", "CREATE_EXTERNAL_LOCATION", 
+    "CREATE_CATALOG", "CREATE_CONNECTION", "CREATE_EXTERNAL_LOCATION",
     "CREATE_STORAGE_CREDENTIAL",
   ]
 
   databricks_catalog_grants = [
-    "CREATE_SCHEMA", "CREATE_FUNCTION", "CREATE_TABLE", "CREATE_VOLUME", 
+    "CREATE_SCHEMA", "CREATE_FUNCTION", "CREATE_TABLE", "CREATE_VOLUME",
     "USE_CATALOG", "USE_SCHEMA", "READ_VOLUME", "SELECT",
   ]
 
   # Define Spark environment variables
-  spark_env_variables      = {
-    "CLOUD_PROVIDER": upper(local.cloud),
-    "RAW_DIR": module.databricks_metastore.databricks_external_location_url,
-    "OUTPUT_DIR": module.databricks_metastore.databricks_external_location_url,
-    "SERVICE_ACCOUNT_CLIENT_ID": "spark.hadoop.fs.s3a.access.key",
-    "SERVICE_ACCOUNT_CLIENT_SECRET": "spark.hadoop.fs.s3a.secret.key"
+  spark_env_variables = {
+    "CLOUD_PROVIDER" : upper(local.cloud),
+    "RAW_DIR" : module.databricks_metastore.databricks_external_location_url,
+    "OUTPUT_DIR" : module.databricks_metastore.databricks_external_location_url,
+    "SERVICE_ACCOUNT_CLIENT_ID" : "spark.hadoop.fs.s3a.access.key",
+    "SERVICE_ACCOUNT_CLIENT_SECRET" : "spark.hadoop.fs.s3a.secret.key"
   }
 
-  spark_conf_variables     = {
-    "spark.hadoop.fs.s3a.endpoint": "s3.amazonaws.com",
-    "spark.hadoop.fs.s3a.access.key": "{{secrets/${module.databricks_secrets.databricks_secret_scope_id}/${module.databricks_secrets.databricks_service_account_client_id_secret_name}}}",
-    "spark.hadoop.fs.s3a.secret.key": "{{secrets/${module.databricks_secrets.databricks_secret_scope_id}/${module.databricks_secrets.databricks_service_account_client_secret_secret_name}}}",
-    "spark.hadoop.fs.s3a.aws.credentials.provider": "org.apache.hadoop.fs.s3a.BasicAWSCredentialsProvider",
-    "spark.hadoop.fs.s3a.server-side-encryption-algorithm": "SSE-KMS",
-    "spark.databricks.driver.strace.enabled": "true"
+  spark_conf_variables = {
+    "spark.hadoop.fs.s3a.endpoint" : "s3.amazonaws.com",
+    "spark.hadoop.fs.s3a.access.key" : "{{secrets/${module.databricks_secrets.databricks_secret_scope_id}/${module.databricks_secrets.databricks_service_account_client_id_secret_name}}}",
+    "spark.hadoop.fs.s3a.secret.key" : "{{secrets/${module.databricks_secrets.databricks_secret_scope_id}/${module.databricks_secrets.databricks_service_account_client_secret_secret_name}}}",
+    "spark.hadoop.fs.s3a.aws.credentials.provider" : "org.apache.hadoop.fs.s3a.BasicAWSCredentialsProvider",
+    "spark.hadoop.fs.s3a.server-side-encryption-algorithm" : "SSE-KMS",
+    "spark.databricks.driver.strace.enabled" : "true"
   }
 
   databricks_cluster_library_files = [
@@ -157,9 +157,9 @@ locals  {
 
   databricks_aws_attributes = {
     attributes = {
-        availability       = "SPOT_AZURE"
-        first_on_demand    = 0
-        spot_bid_max_price = -1
+      availability       = "SPOT_AZURE"
+      first_on_demand    = 0
+      spot_bid_max_price = -1
     }
   }
 
@@ -278,16 +278,16 @@ provider "databricks" {
 ## - `tags`: AWS tags.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_workspace" {
-  source = "../"
-  depends_on = [ module.aws_identity_federation_roles ]
-  
-  DATABRICKS_ACCOUNT_ID                    = var.DATABRICKS_ACCOUNT_ID
-  aws_s3_bucket_name                       = "${local.prefix}-bucket"
-  aws_kms_key_name                         = "${local.prefix}-kms-key"
-  aws_databricks_iam_role_name             = "${local.prefix}-iam-role"
-  aws_databricks_vpc_name                  = "${local.prefix}-vpc"
-  databricks_workspace_name                = "${local.prefix}-workspace"
-  tags                                     = local.tags
+  source     = "../"
+  depends_on = [module.aws_identity_federation_roles]
+
+  DATABRICKS_ACCOUNT_ID        = var.DATABRICKS_ACCOUNT_ID
+  aws_s3_bucket_name           = "${local.prefix}-bucket"
+  aws_kms_key_name             = "${local.prefix}-kms-key"
+  aws_databricks_iam_role_name = "${local.prefix}-iam-role"
+  aws_databricks_vpc_name      = "${local.prefix}-vpc"
+  databricks_workspace_name    = "${local.prefix}-workspace"
+  tags                         = local.tags
 
   providers = {
     aws.auth_session    = aws.auth_session
@@ -323,10 +323,10 @@ provider "databricks" {
 ## - `aws_service_principal_name`: AWS IAM service principal name.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_secrets" {
-  source = "../modules/databricks_secrets"
-  depends_on = [ module.databricks_workspace ]
+  source     = "../modules/databricks_secrets"
+  depends_on = [module.databricks_workspace]
 
-  aws_kms_key_id             =  module.databricks_workspace.aws_kms_key_id
+  aws_kms_key_id             = module.databricks_workspace.aws_kms_key_id
   aws_service_principal_name = var.service_account_name
 
   providers = {
@@ -354,8 +354,8 @@ module "databricks_secrets" {
 ## - `databricks_catalog_name`: Name of catalog to create in Databricks Workspace.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_metastore" {
-  source   = "../modules/aws_databricks_metastore"
-  depends_on = [ module.databricks_workspace ]
+  source     = "../modules/aws_databricks_metastore"
+  depends_on = [module.databricks_workspace]
 
   DATABRICKS_ACCOUNT_ID             = var.DATABRICKS_ACCOUNT_ID
   DATABRICKS_ADMINISTRATOR          = var.DATABRICKS_ADMINISTRATOR
@@ -369,7 +369,7 @@ module "databricks_metastore" {
   databricks_metastore_grants       = local.databricks_metastore_grants
   databricks_catalog_grants         = local.databricks_catalog_grants
   databricks_catalog_name           = "${local.prefix}-catalog"
-  
+
   providers = {
     aws.auth_session     = aws.auth_session
     databricks.accounts  = databricks.accounts
@@ -392,7 +392,7 @@ data "http" "hadoop_aws_jar" {
 
   # Optional request headers
   request_headers = {
-    Accept  = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+    Accept          = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
     Accept-Encoding = "gzip, deflate, br, zstd"
   }
 }
@@ -412,7 +412,7 @@ data "http" "aws_java_sdk_jar" {
 
   # Optional request headers
   request_headers = {
-    Accept  = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
+    Accept          = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7"
     Accept-Encoding = "gzip, deflate, br, zstd"
   }
 }
@@ -437,12 +437,12 @@ data "http" "aws_java_sdk_jar" {
 ## - `databricks_workspace_group`: Databricks Workspace group to create for cluster policy permission.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_workspace_config" {
-  source   = "github.com/sim-parables/terraform-databricks?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
-  depends_on = [ 
+  source = "github.com/sim-parables/terraform-databricks?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
+  depends_on = [
     module.databricks_workspace,
-    module.databricks_metastore 
+    module.databricks_metastore
   ]
-  
+
   DATABRICKS_CLUSTERS                      = var.DATABRICKS_CLUSTERS
   databricks_cluster_name                  = "${local.prefix}-cluster"
   databricks_catalog_name                  = module.databricks_metastore.databricks_catalog_name
@@ -454,7 +454,7 @@ module "databricks_workspace_config" {
   databricks_workspace_group               = "${local.prefix}-group"
 
   providers = {
-    databricks.accounts = databricks.accounts
+    databricks.accounts  = databricks.accounts
     databricks.workspace = databricks.workspace
   }
 }

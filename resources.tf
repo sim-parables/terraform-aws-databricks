@@ -1,12 +1,12 @@
-terraform{
+terraform {
   required_providers {
     databricks = {
-      source = "databricks/databricks"
-      configuration_aliases = [ databricks.accounts ]
+      source                = "databricks/databricks"
+      configuration_aliases = [databricks.accounts]
     }
     aws = {
-      source = "hashicorp/aws"
-      configuration_aliases = [ aws.auth_session ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.auth_session]
     }
   }
 }
@@ -35,8 +35,8 @@ data "aws_caller_identity" "current" {
 ## - `kms_key_name`: The name of the KMS key.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "aws_kms_key" {
-  source           = "./modules/aws_kms_key"
-  kms_key_name     = var.aws_kms_key_name
+  source       = "./modules/aws_kms_key"
+  kms_key_name = var.aws_kms_key_name
 
   providers = {
     aws.auth_session = aws.auth_session
@@ -87,7 +87,7 @@ module "databricks_iam_role" {
   tags                  = var.tags
 
   providers = {
-    aws.auth_session = aws.auth_session
+    aws.auth_session    = aws.auth_session
     databricks.accounts = databricks.accounts
   }
 }
@@ -110,7 +110,7 @@ module "databricks_vpc" {
   tags                  = var.tags
 
   providers = {
-    aws.auth_session = aws.auth_session
+    aws.auth_session    = aws.auth_session
     databricks.accounts = databricks.accounts
   }
 }
@@ -130,13 +130,13 @@ module "databricks_vpc" {
 ## - `network_id`: The ID of the network.
 ## ---------------------------------------------------------------------------------------------------------------------
 resource "databricks_mws_workspaces" "this" {
-  provider       = databricks.accounts
-  depends_on = [ 
+  provider = databricks.accounts
+  depends_on = [
     module.databricks_storage_configuration,
     module.databricks_iam_role,
     module.databricks_vpc
   ]
-  
+
   account_id               = var.DATABRICKS_ACCOUNT_ID
   aws_region               = data.aws_region.current.name
   workspace_name           = var.databricks_workspace_name

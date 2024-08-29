@@ -10,12 +10,12 @@ output "aws_databricks_bucket_arn" {
 
 output "aws_kms_key_id" {
   description = "AWS KMS Encryption Key ID"
-  value = module.aws_kms_key.kms_key_id
+  value       = module.aws_kms_key.kms_key_id
 }
 
 output "aws_kms_key_arn" {
   description = "AWS KMS Encryption Key ARN"
-  value = module.aws_kms_key.kms_key_arn
+  value       = module.aws_kms_key.kms_key_arn
 }
 
 output "databricks_host" {

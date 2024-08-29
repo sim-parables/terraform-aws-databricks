@@ -1,14 +1,14 @@
 /* Databricks AWS VPC Depoloyment and Configuraiton */
 
-terraform{
+terraform {
   required_providers {
     databricks = {
-      source = "databricks/databricks"
-      configuration_aliases = [ databricks.accounts, ]
+      source                = "databricks/databricks"
+      configuration_aliases = [databricks.accounts, ]
     }
     aws = {
-      source = "hashicorp/aws"
-      configuration_aliases = [ aws.auth_session, ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.auth_session, ]
     }
   }
 }
@@ -17,7 +17,7 @@ data "aws_region" "current" {
   provider = aws.auth_session
 }
 
-locals  {
+locals {
   vpc_availability_zone = [for zone in ["a", "b", "c"] : "${data.aws_region.current.name}${zone}"]
 }
 
@@ -106,8 +106,8 @@ module "vpc_endpoints" {
 
   endpoints = {
     s3 = {
-      service        = "s3"
-      service_type   = "Gateway"
+      service      = "s3"
+      service_type = "Gateway"
       route_table_ids = flatten([
         module.vpc.private_route_table_ids,
         module.vpc.public_route_table_ids

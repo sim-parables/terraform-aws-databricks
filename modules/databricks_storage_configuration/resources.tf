@@ -1,12 +1,12 @@
-terraform{
+terraform {
   required_providers {
     databricks = {
-      source = "databricks/databricks"
-      configuration_aliases = [ databricks.accounts, ]
+      source                = "databricks/databricks"
+      configuration_aliases = [databricks.accounts, ]
     }
     aws = {
-      source = "hashicorp/aws"
-      configuration_aliases = [ aws.auth_session, ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.auth_session, ]
     }
   }
 }
@@ -43,9 +43,9 @@ module "databricks_bucket" {
 ## - `bucket`: S3 name.
 ##---------------------------------------------------------------------------------------------------------------------
 data "databricks_aws_bucket_policy" "this" {
-  provider         = databricks.accounts
+  provider = databricks.accounts
 
-  bucket           = module.databricks_bucket.bucket_id
+  bucket = module.databricks_bucket.bucket_id
 }
 
 ##---------------------------------------------------------------------------------------------------------------------
@@ -59,7 +59,7 @@ data "databricks_aws_bucket_policy" "this" {
 ##---------------------------------------------------------------------------------------------------------------------
 resource "aws_s3_bucket_policy" "this" {
   provider   = aws.auth_session
-  depends_on = [ module.databricks_bucket ]
+  depends_on = [module.databricks_bucket]
 
   bucket = module.databricks_bucket.bucket_id
   policy = data.databricks_aws_bucket_policy.this.json
@@ -78,7 +78,7 @@ resource "aws_s3_bucket_policy" "this" {
 ## ---------------------------------------------------------------------------------------------------------------------
 resource "databricks_mws_storage_configurations" "this" {
   provider   = databricks.accounts
-  depends_on = [ aws_s3_bucket_policy.this ]
+  depends_on = [aws_s3_bucket_policy.this]
 
   account_id                 = var.databricks_account_id
   bucket_name                = module.databricks_bucket.bucket_id

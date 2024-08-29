@@ -1,12 +1,12 @@
-terraform{
+terraform {
   required_providers {
     databricks = {
-      source = "databricks/databricks"
-      configuration_aliases = [ databricks.workspace ]
+      source                = "databricks/databricks"
+      configuration_aliases = [databricks.workspace]
     }
     aws = {
-      source = "hashicorp/aws"
-      configuration_aliases = [ aws.auth_session ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.auth_session]
     }
   }
 }
@@ -21,8 +21,8 @@ terraform{
 ## - `user_name`: The IAM user for whom the access key needs creation.
 ## ---------------------------------------------------------------------------------------------------------------------
 data "aws_iam_user" "this" {
-  provider = aws.auth_session
-  user_name     = var.aws_service_principal_name
+  provider  = aws.auth_session
+  user_name = var.aws_service_principal_name
 }
 
 
@@ -53,8 +53,8 @@ resource "aws_iam_access_key" "this" {
 ## - `administrator_arn`: The ARN of the AWS IAM administrator.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "aws_secret_client_id" {
-  source             = "../aws_secret"
-  
+  source = "../aws_secret"
+
   kms_key_id         = var.aws_kms_key_id
   secret_name        = var.aws_databricks_client_id_secret_name
   secret_description = "Databricks Service Principal Client ID to Read Blobs"
@@ -80,8 +80,8 @@ module "aws_secret_client_id" {
 ## - `administrator_arn`: The ARN of the AWS IAM administrator.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "aws_secret_client_secret" {
-  source             = "../aws_secret"
-  
+  source = "../aws_secret"
+
   kms_key_id         = var.aws_kms_key_id
   secret_name        = var.aws_databricks_client_secret_secret_name
   secret_description = "Databricks Service Principal Client Secret to Read Blobs"
@@ -105,7 +105,7 @@ module "aws_secret_client_secret" {
 ## - `secret_scope`: Specifies the name of Databricks Secret Scope.
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_secret_scope" {
-  source   = "github.com/sim-parables/terraform-databricks//modules/databricks_secret_scope?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
+  source = "github.com/sim-parables/terraform-databricks//modules/databricks_secret_scope?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
 
   secret_scope = var.databricks_secret_scope_name
 
@@ -127,13 +127,13 @@ module "databricks_secret_scope" {
 ## - `secret_data`: Specifies the data of the secret (client ID of the Azure service principal)
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_service_account_key_name_secret" {
-  source      = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
-  depends_on  = [ module.databricks_secret_scope ]
-  
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
+  depends_on = [module.databricks_secret_scope]
+
   secret_scope_id = module.databricks_secret_scope.databricks_secret_scope_id
   secret_name     = var.aws_databricks_client_id_secret_name
   secret_data     = data.aws_iam_user.this.user_id
-  
+
   providers = {
     databricks.workspace = databricks.workspace
   }
@@ -152,9 +152,9 @@ module "databricks_service_account_key_name_secret" {
 ## - `secret_data`: Specifies the data of the secret (client Secret of the Azure service principal)
 ## ---------------------------------------------------------------------------------------------------------------------
 module "databricks_service_account_key_data_secret" {
-  source       = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
-  depends_on   = [ module.databricks_secret_scope ]
-  
+  source     = "github.com/sim-parables/terraform-databricks//modules/databricks_secret?ref=fe03c8ba5c8b65b4b51ef6e7eb3af56f8952ead5"
+  depends_on = [module.databricks_secret_scope]
+
   secret_scope_id = module.databricks_secret_scope.databricks_secret_scope_id
   secret_name     = var.aws_databricks_client_secret_secret_name
   secret_data     = aws_iam_access_key.this.secret

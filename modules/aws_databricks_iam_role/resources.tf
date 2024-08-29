@@ -1,14 +1,14 @@
 /* Databricks AWS IAM Role Configurations & Service Account Creation */
 
-terraform{
+terraform {
   required_providers {
     databricks = {
-      source = "databricks/databricks"
-      configuration_aliases = [ databricks.accounts, ]
+      source                = "databricks/databricks"
+      configuration_aliases = [databricks.accounts, ]
     }
     aws = {
-      source = "hashicorp/aws"
-      configuration_aliases = [ aws.auth_session, ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.auth_session, ]
     }
   }
 }
@@ -114,12 +114,12 @@ resource "time_sleep" "this" {
 ## - `databricks.accounts`: The Databricks provider.
 ## ---------------------------------------------------------------------------------------------------------------------
 resource "databricks_mws_credentials" "this" {
-  provider         = databricks.accounts
-  depends_on       = [
+  provider = databricks.accounts
+  depends_on = [
     aws_iam_role_policy.this,
     time_sleep.this
   ]
-  
+
   account_id       = var.databricks_account_id
   role_arn         = aws_iam_role.this.arn
   credentials_name = "${var.aws_iam_role_name}-credentials"

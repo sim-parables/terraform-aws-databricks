@@ -1,8 +1,8 @@
-terraform{
+terraform {
   required_providers {
     aws = {
-      source = "hashicorp/aws"
-      configuration_aliases = [ aws.auth_session, ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.auth_session, ]
     }
   }
 }
@@ -13,8 +13,8 @@ locals {
   project = "datasim"
 }
 
-locals  {
-  tags    = merge(var.tags, {
+locals {
+  tags = merge(var.tags, {
     program = local.program
     project = local.project
     env     = "dev"
@@ -35,7 +35,7 @@ locals  {
 ## - `aws.auth_session`: The AWS provider with authentication session.
 ## ---------------------------------------------------------------------------------------------------------------------
 resource "aws_kms_key" "this" {
-  provider                = aws.auth_session
+  provider = aws.auth_session
 
   description             = var.kms_key_name
   deletion_window_in_days = var.kms_retention_days

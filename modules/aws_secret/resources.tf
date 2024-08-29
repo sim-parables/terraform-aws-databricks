@@ -1,8 +1,8 @@
-terraform{
+terraform {
   required_providers {
     aws = {
-      source = "hashicorp/aws"
-      configuration_aliases = [ aws.auth_session, ]
+      source                = "hashicorp/aws"
+      configuration_aliases = [aws.auth_session, ]
     }
   }
 }
@@ -30,13 +30,13 @@ data "aws_caller_identity" "current" {
 ## ---------------------------------------------------------------------------------------------------------------------
 data "aws_iam_policy_document" "this" {
   provider = aws.auth_session
-  
+
   statement {
     sid    = "EnableAnotherAWSAccountToReadTheSecret"
     effect = "Allow"
 
     principals {
-      type        = "AWS"
+      type = "AWS"
       identifiers = [
         data.aws_caller_identity.current.arn,
         var.administrator_arn
@@ -71,10 +71,10 @@ locals {
   project = "datasim"
 }
 
-locals  {
+locals {
   prefix      = "${local.program}-${local.project}-${random_string.this.id}"
   description = var.secret_description != null ? var.secret_description : "${local.prefix} ${var.secret_name} Secret by Terraform"
-  tags    = merge(var.tags, {
+  tags = merge(var.tags, {
     program = local.program
     project = local.project
     env     = "dev"

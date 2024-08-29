@@ -1,6 +1,6 @@
 output "service_account_client_id" {
   description = "AWS Databricks Service Account Client ID"
-  value = module.aws_service_account.access_id
+  value       = module.aws_service_account.access_id
 }
 
 output "service_account_client_secret" {
